@@ -1,0 +1,9 @@
+framework:
+    secret: '%env(APP_SECRET)%'
+    router:
+        utf8: true
+    session:
+        cookie_httponly: true
+        cookie_samesite: lax
+        cookie_secure: auto
+    http_client: ~
