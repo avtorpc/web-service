@@ -1,113 +1,113 @@
-let pendingVerification=null;
-function selectAuthTab(mode, focusTab = false) {
-  $('#emailVerification').hidden=true;
-  $('.auth-tabs').hidden=false;
-  pendingVerification=null;
-  const register = mode === 'register';
-  $('#loginPanel').hidden = register;
-  $('#registerPanel').hidden = !register;
-  $('#loginTab').setAttribute('aria-selected', String(!register));
-  $('#registerTab').setAttribute('aria-selected', String(register));
-  $('#loginTab').tabIndex = register ? -1 : 0;
-  $('#registerTab').tabIndex = register ? 0 : -1;
-  $('#authTitle').textContent = register ? 'Создайте свой аккаунт' : 'Рады вас видеть';
-  $('#authStatus').textContent = '';
-  if (focusTab) $(register ? '#registerTab' : '#loginTab').focus();
-}
-$('#openAuth').onclick = () => {selectAuthTab('login');$('#authModal').showModal();$('#loginEmail').focus()};
-$('#closeAuth').onclick = () => $('#authModal').close();
-$('#loginTab').onclick = () => selectAuthTab('login');
-$('#registerTab').onclick = () => selectAuthTab('register');
-['#loginTab', '#registerTab'].forEach(id => $(id).addEventListener('keydown', event => {
-  if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
-    event.preventDefault();
-    const mode = event.key === 'Home' ? 'login' : event.key === 'End' ? 'register' : id === '#loginTab' ? 'register' : 'login';
-    selectAuthTab(mode, true);
+(() => {
+// Authenticated pages are rendered without registration or login forms.
+if (!document.querySelector('#authModal')) {
+  const logoutForm = document.querySelector('#logoutForm');
+  if (logoutForm) {
+    const remaining = Number(logoutForm.dataset.sessionExpiresAt) * 1000 - Date.now();
+    setTimeout(() => location.reload(), Math.max(0, Math.min(remaining, 2147483647)));
+    const employerLink = document.querySelector('#createVacancy');
+    if (employerLink) employerLink.href = 'employer.html';
   }
+  return;
+}
+// Registration credentials and codes belong to the server. Browser storage is not authentication.
+let pendingVerification = null;
+let registrationBusy = false;
+let resendDeadline = 0;
+let pollTimer = null;
+const authCsrf = document.querySelector('meta[name="registration-csrf"]').content;
+async function authRequest(action, payload = {}) {
+  const response = await fetch('/registration/' + action, {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json','X-CSRF-Token':authCsrf}, body:JSON.stringify(payload)});
+  let body; try { body = await response.json(); } catch { throw new Error('Сервис временно недоступен. Повторите позже.'); }
+  if (!response.ok || !body.success) { const error = new Error(body.error?.message || 'Не удалось выполнить запрос.'); error.details=body.error || {}; throw error; }
+  return body;
+}
+async function authAction(target, fn) {
+  if (registrationBusy) return;
+  registrationBusy = true;
+  const buttons = [...document.querySelectorAll('#authModal button')];
+  buttons.forEach(b=>b.disabled=true);
+  try { await fn(); } catch (error) { target.textContent=error.message; if(error.details?.retryAfter)target.textContent+=' Повторите через '+error.details.retryAfter+' сек.'; }
+  finally { registrationBusy=false; buttons.forEach(b=>b.disabled=false); updateResend(); }
+}
+function selectAuthTab(mode, focusTab=false) {
+  if (pendingVerification) { showVerification(pendingVerification); return; }
+  $('#emailVerification').hidden=true; $('.auth-tabs').hidden=false;
+  const register=mode==='register'; $('#loginPanel').hidden=register; $('#registerPanel').hidden=!register;
+  $('#loginTab').setAttribute('aria-selected',String(!register)); $('#registerTab').setAttribute('aria-selected',String(register));
+  $('#loginTab').tabIndex=register?-1:0; $('#registerTab').tabIndex=register?0:-1;
+  $('#authTitle').textContent=register?'Создайте свой аккаунт':'Рады вас видеть'; $('#authStatus').textContent='';
+  if(focusTab)$(register?'#registerTab':'#loginTab').focus();
+}
+function readyToLogin(data) {
+  clearTimeout(pollTimer); pendingVerification=null; selectAuthTab('login');
+  $('#loginEmail').value=data.email; $('#loginPassword').value=''; $('#registerPassword').value='';
+  $('#authStatus').textContent='Регистрация завершена. Введите пароль, который указали при регистрации.';
+  $('#loginPassword').focus();
+}
+function showVerification(data) {
+  if(data.status==='ready'){readyToLogin(data);return;}
+  if(data.status==='conflict'){readyToLogin(data);$('#authStatus').textContent='Аккаунт с этим email уже существует. Введите его пароль.';return;}
+  pendingVerification=data; resendDeadline=Date.now()+data.retryAfter*1000;
+  $('#loginPanel').hidden=true; $('#registerPanel').hidden=true; $('.auth-tabs').hidden=true; $('#emailVerification').hidden=false;
+  $('#authTitle').textContent=data.status==='creating'?'Создаём аккаунт':'Подтвердите почту';
+  $('#verifyEmail').textContent='Письмо с кодом для '+data.email;
+  $('#verifyForm').hidden=data.status!=='pending'; $('#changeVerifyEmail').disabled=registrationBusy||data.status==='creating';
+  $('#verifyStatus').textContent=data.status==='creating'?'Email подтверждён. Ожидаем создание аккаунта.':data.status==='expired'?'Время регистрации истекло. Начните заново.':data.status==='conflict'?'Email уже занят. Войдите с паролем существующего аккаунта.':'Код действует до '+new Date(data.codeExpiresAt).toLocaleTimeString()+'. Проверьте почту и папку «Спам».';
+  updateResend();
+  if(data.status==='creating')pollTimer=setTimeout(pollRegistration,2000);
+}
+async function pollRegistration() {
+  if(registrationBusy){pollTimer=setTimeout(pollRegistration,2000);return;}
+  try { showVerification(await authRequest('status')); }
+  catch(error){$('#verifyStatus').textContent=error.message+' Подтверждение сохранено, повторяем проверку.';pollTimer=setTimeout(pollRegistration,5000);}
+}
+function updateResend() {
+  const b=$('#resendEmailCode'); const seconds=Math.max(0,Math.ceil((resendDeadline-Date.now())/1000));
+  const expired=pendingVerification && Date.now()>=Date.parse(pendingVerification.expiresAt);
+  b.disabled=registrationBusy||!pendingVerification||expired||pendingVerification.status!=='pending'||pendingVerification.resendsLeft<=0||seconds>0;
+  if(expired && pendingVerification.status==='pending')$('#verifyStatus').textContent='Время регистрации истекло. Начните заново.';
+  b.textContent=seconds?'Отправить снова через '+seconds+' сек.':pendingVerification?.resendsLeft===0?'Повторные отправки исчерпаны':'Отправить код повторно';
+  $('#changeVerifyEmail').disabled=registrationBusy||pendingVerification?.status==='creating';
+}
+setInterval(updateResend,1000);
+$('#openAuth').onclick=()=>{selectAuthTab('login');$('#authModal').showModal();};
+$('#closeAuth').onclick=()=>$('#authModal').close();
+$('#loginTab').onclick=()=>selectAuthTab('login'); $('#registerTab').onclick=()=>selectAuthTab('register');
+['#loginTab','#registerTab'].forEach(id=>$(id).addEventListener('keydown',event=>{
+ if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();selectAuthTab(event.key==='Home'?'login':event.key==='End'?'register':id==='#loginTab'?'register':'login',true);}
 }));
-['login', 'register'].forEach(mode => {
-  $('#' + mode + 'Form').addEventListener('submit', event => {
-    event.preventDefault();
-    if (!event.target.reportValidity()) return;
-    if (mode === 'register' && $('#registerRole').value === 'employer') {
-      const profile = {version:1, name:$('#registerName').value.trim(), company:$('#registerCompany').value.trim(), type:$('#registerEmployerType').value, email:$('#registerEmail').value.trim()};
-      if (!profile.name || !profile.company) {$('#authStatus').textContent='Введите имя и название работодателя.';return;}
-      try { sessionStorage.setItem('mesto-demo-employer', JSON.stringify(profile)); }
-      catch {$('#authStatus').textContent='Не удалось сохранить данные сеанса. Разрешите хранилище браузера и попробуйте снова.';return;}
-      $('#registerPassword').value='';
-      location.href='employer.html';
-      return;
-    }
-    if(mode==='register'){
-      const name=$('#registerName').value.trim();if(!name){$('#authStatus').textContent='Введите имя.';return;}
-      beginVerification({version:1,name,email:$('#registerEmail').value.trim()});
-      $('#registerPassword').value='';return;
-    }
-    if(mode==='login'){
-      const profile=UserStore.profile();
-      if(profile&&profile.email.toLowerCase()===$('#loginEmail').value.trim().toLowerCase()){
-        beginVerification({version:1,name:profile.name,email:profile.email});$('#loginPassword').value='';return;
-      }
-    }
-    $('#' + mode + 'Password').value = '';
-    $('#authStatus').textContent = mode === 'login'
-      ? 'Форма заполнена. В прототипе вход недоступен — авторизация появится после подключения сервера.'
-      : 'Форма заполнена. Это демонстрация: аккаунт не создан. Регистрация появится после подключения сервера.';
-  });
+function updateEmployerRegistration(){
+ const employer=$('#registerRole').value==='employer';$('#employerRegistrationFields').hidden=!employer;$('#registerCompany').required=employer;$('#registerCompany').disabled=!employer;$('#registerEmployerType').disabled=!employer;
+ $('#registerForm button[type="submit"]').textContent='Отправить код на почту →';
+}
+$('#registerRole').addEventListener('change',updateEmployerRegistration);updateEmployerRegistration();
+$('#registerForm').addEventListener('submit',event=>{
+ event.preventDefault();if(!event.target.reportValidity())return;
+ authAction($('#authStatus'),async()=>{
+  const data=await authRequest('start',{name:$('#registerName').value.trim(),email:$('#registerEmail').value.trim(),password:$('#registerPassword').value,roleCode:$('#registerRole').value,employerType:$('#registerEmployerType').value,company:$('#registerCompany').value.trim(),acceptTerms:$('#registerTerms').checked});
+  $('#registerPassword').value='';$('#emailCode').value='';showVerification(data);
+ });
 });
-$('#authModal').addEventListener('close', () => {
-  pendingVerification=null;$('#verifyForm').reset();$('#emailVerification').hidden=true;$('.auth-tabs').hidden=false;$('#loginForm').reset();$('#registerForm').reset();updateEmployerRegistration();$('#authStatus').textContent='';$('#openAuth').focus();
+$('#verifyForm').addEventListener('submit',event=>{event.preventDefault();if(!event.target.reportValidity())return;authAction($('#verifyStatus'),async()=>{showVerification(await authRequest('verify',{verificationCode:$('#emailCode').value}));$('#emailCode').value='';});});
+$('#resendEmailCode').onclick=()=>authAction($('#verifyStatus'),async()=>{showVerification(await authRequest('resend'));$('#emailCode').value='';});
+$('#changeVerifyEmail').onclick=()=>authAction($('#verifyStatus'),async()=>{
+ await authRequest('cancel');clearTimeout(pollTimer);pendingVerification=null;$('#verifyForm').reset();$('#registerPassword').value='';selectAuthTab('register');$('#registerEmail').focus();
 });
-$('#authModal').addEventListener('click', event => {
-  if (event.target !== $('#authModal')) return;
-  const rect = $('#authModal').getBoundingClientRect();
-  if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) $('#authModal').close();
+$('#loginForm').addEventListener('submit',event=>{
+ event.preventDefault();if(!event.target.reportValidity())return;
+ authAction($('#authStatus'),async()=>{const password=$('#loginPassword').value;$('#loginPassword').value='';const result=await authRequest('login',{email:$('#loginEmail').value.trim(),password});$('#authStatus').textContent=result.message;location.assign(result.redirect || '/cabinet');});
 });
+$('#authModal').addEventListener('close',()=>{$('#loginPassword').value='';$('#registerPassword').value='';$('#emailCode').value='';$('#openAuth').focus();});
+$('#authModal').addEventListener('click',event=>{if(event.target!==$('#authModal'))return;const r=$('#authModal').getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)$('#authModal').close();});
+function startEmployerRegistration(){ $('#registerRole').value='employer';updateEmployerRegistration();selectAuthTab('register');if(!$('#authModal').open)$('#authModal').showModal(); }
+if($('#createVacancy'))$('#createVacancy').addEventListener('click',event=>{event.preventDefault();startEmployerRegistration();});
+if($('#myResume'))$('#myResume').addEventListener('click',event=>{event.preventDefault();$('#registerRole').value='applicant';updateEmployerRegistration();selectAuthTab('register');$('#authModal').showModal();});
+const requestedRole=new URLSearchParams(location.search).get('register');
+if(['applicant','employer'].includes(requestedRole)){$('#registerRole').value=requestedRole;updateEmployerRegistration();selectAuthTab('register');$('#authModal').showModal();}
+// Resume the server-bound request after refresh. Its identifier is never taken from browser input.
+authRequest('status').then(data=>{if(data.status==='cancelled')return;showVerification(data);if(!$('#authModal').open)$('#authModal').showModal();}).catch(()=>{});
 
-function updateEmployerRegistration() {
-  const employer=$('#registerRole').value==='employer';
-  $('#employerRegistrationFields').hidden=!employer;
-  $('#registerCompany').required=employer;
-  $('#registerCompany').disabled=!employer;
-  $('#registerEmployerType').disabled=!employer;
-  $('#registerForm button[type="submit"]').textContent=employer?'Перейти в кабинет →':'Отправить код на почту →';
-}
-function startEmployerRegistration() {
-  $('#registerRole').value='employer';updateEmployerRegistration();selectAuthTab('register');
-  if(!$('#authModal').open)$('#authModal').showModal();
-  $('#registerName').focus();
-}
-$('#registerRole').addEventListener('change',updateEmployerRegistration);
-if($('#createVacancy'))$('#createVacancy').addEventListener('click',event=>{event.preventDefault();let profile=null;try{profile=JSON.parse(sessionStorage.getItem('mesto-demo-employer'))}catch{}if(profile&&profile.version===1&&typeof profile.email==='string')location.href='employer.html';else startEmployerRegistration()});
-updateEmployerRegistration();
-if(new URLSearchParams(location.search).get('register')==='employer')startEmployerRegistration();
+})();
 
-function beginVerification(profile){
-  const bytes=new Uint32Array(1);crypto.getRandomValues(bytes);
-  let code=String(100000+bytes[0]%900000);
-  if(pendingVerification&&code===pendingVerification.code)code=String(100000+(Number(code)-100000+1)%900000);
-  pendingVerification={profile,code,expires:Date.now()+5*60*1000,attempts:0};
-  $('#loginPanel').hidden=true;$('#registerPanel').hidden=true;$('.auth-tabs').hidden=true;
-  $('#emailVerification').hidden=false;$('#authTitle').textContent='Проверьте вашу почту';
-  $('#verifyEmail').textContent='Демонстрационное письмо для '+profile.email;
-  $('#demoEmailCode').textContent=pendingVerification.code;$('#emailCode').value='';
-  $('#verifyStatus').textContent='Код действует 5 минут. Откройте демописьмо ниже.';$('#authStatus').textContent='';$('#emailCode').focus();
-}
-$('#verifyForm').addEventListener('submit',event=>{
-  event.preventDefault();if(!event.target.reportValidity()||!pendingVerification)return;
-  if(Date.now()>pendingVerification.expires){$('#verifyStatus').textContent='Код истёк. Запросите новый.';return;}
-  if(pendingVerification.attempts>=5){$('#verifyStatus').textContent='Слишком много попыток. Запросите новый код.';return;}
-  if($('#emailCode').value!==pendingVerification.code){pendingVerification.attempts++;$('#verifyStatus').textContent='Неверный код. Проверьте демонстрационное письмо.';return;}
-  try{sessionStorage.setItem('mesto-demo-user',JSON.stringify({...pendingVerification.profile,verified:true}));}
-  catch{$('#verifyStatus').textContent='Хранилище сеанса недоступно. Продолжить не удалось.';return;}
-  pendingVerification=null;location.href='user.html';
-});
-$('#resendEmailCode').onclick=()=>{if(pendingVerification)beginVerification(pendingVerification.profile)};
-$('#changeVerifyEmail').onclick=()=>{selectAuthTab('register');$('#registerEmail').focus()};
-if($('#myResume')){
-  $('#myResume').href='user.html';$('#myResumeTitle').textContent='Личный кабинет и резюме ↗';
-  $('#myResume').addEventListener('click',event=>{if(!UserStore.profile()){event.preventDefault();$('#registerRole').value='applicant';updateEmployerRegistration();selectAuthTab('register');$('#authModal').showModal()}});
-}
-if(new URLSearchParams(location.search).get('register')==='applicant'){
-  $('#registerRole').value='applicant';updateEmployerRegistration();selectAuthTab('register');$('#authModal').showModal();
-}
+if (new URLSearchParams(location.search).get('login') === '1' && document.querySelector('#authModal')) document.querySelector('#openAuth').click();

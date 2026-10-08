@@ -3,6 +3,7 @@ framework:
     router:
         utf8: true
     session:
+        save_path: '%kernel.project_dir%/var/sessions/%kernel.environment%'
         cookie_httponly: true
         cookie_samesite: lax
         cookie_secure: auto

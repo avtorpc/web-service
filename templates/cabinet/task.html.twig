@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="registration-csrf" content="{{ registration_csrf }}"><title>Тестовое задание — место</title><link rel="stylesheet" href="/css/styles.css"><link rel="stylesheet" href="/css/cabinet.css"></head>
+<body><div class="wrap"><header><a class="logo" href="/" aria-label="место — главная"><span class="mark"></span>место</a><nav><a href="/">Главная</a><a href="/cabinet">Личный кабинет</a></nav>{% include 'prototype/auth-navigation.html.twig' %}</header>
+<main class="cabinet-page"><a href="/cabinet#myTasks">← Мои задания</a>
+{% if task_error %}<section class="cabinet-card"><h1>Тестовое задание</h1><p role="alert">{{ task_error }}</p></section>
+{% else %}
+{% set attempt = task.attempt %}{% set attempt_status = attempt.status|default('in_progress') %}
+<section class="cabinet-card" id="taskPage" data-task-id="{{ task.id }}" data-task-status="{{ task.status }}" data-attempt-status="{{ attempt_status }}">
+<div class="eyebrow">Задание №{{ task.id }}</div><h1>{{ task.assignment.title|default('Тестовое задание') }}</h1>
+<p>{{ task.selection.specialization_name|default('') }} · {{ task.selection.declared_grade_name|default('') }} · {{ task.created_at|date('d.m.Y H:i') }}</p>
+{% if task.status == 'generating' %}<p id="taskWaiting" role="status">ИИ готовит задание. Можно вернуться в кабинет — оно сохранится в списке.</p>
+{% elseif task.status == 'generation_failed' %}<p role="alert">{{ task.error }}</p><button type="button" class="primary" id="retryGeneration">Повторить получение задания</button><p>Если сочетание несовместимо, измените выбор в кабинете и получите новое задание.</p>
+{% else %}
+<label class="task-field">Описание задания<textarea rows="14" readonly aria-readonly="true">{{ task.assignment.text }}</textarea></label>
+{% if task.assignment.deliverables %}<h3>Что предоставить</h3><ul>{% for item in task.assignment.deliverables %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+{% if task.assignment.constraints %}<h3>Ограничения</h3><ul>{% for item in task.assignment.constraints %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+<section class="task-criteria"><h2>Параметры оценки</h2><p>Эти критерии закреплены за заданием и не редактируются. По каждому: 0 — ни одна проверка, 1 — одна, 2 — обе. Если оснований недостаточно, балл не выставляется.</p>
+{% for criterion in task.criteria %}<article><h3>{{ criterion.competency_name }} · {{ criterion.name }}</h3><ol>{% for check in criterion.checks %}<li><strong>{{ check.condition }}</strong><ul>{% for evidence in check.expected_evidence %}<li>{{ evidence }}</li>{% endfor %}</ul></li>{% endfor %}</ol></article>{% endfor %}</section>
+<form id="taskAnswerForm" class="cabinet-form"><label>Ответ соискателя<textarea id="candidateAnswer" rows="16" maxlength="30000" {{ attempt_status != 'in_progress' ? 'readonly' : '' }} placeholder="Напишите решение, код и объяснение. Максимум 30 000 символов.">{{ attempt.answer.text|default('') }}</textarea></label>
+{% if attempt_status == 'in_progress' %}<div class="task-actions"><button type="button" id="saveAnswer">Сохранить ответ</button><button type="submit" class="primary">Отправить на оценку</button></div><p class="cabinet-note">После отправки ответ фиксируется. Проверка предварительная: код автоматически не запускается.</p>
+{% elseif attempt_status == 'evaluating' %}<p role="status">ИИ оценивает сохранённое решение. Можно закрыть страницу и вернуться позже.</p>
+{% elseif attempt_status == 'evaluation_failed' %}<p role="alert">{{ attempt.evaluation.error }}</p><button type="button" class="primary" id="retryEvaluation">Повторить оценку</button>
+{% endif %}</form>
+{% if attempt_status in ['preliminary','awaiting_review','verified'] %}<section class="task-results"><h2>Предварительная оценка</h2><p>{{ attempt.evaluation.summary }}</p>
+{% for criterion in attempt.evaluation.criteria %}<article><h3>{{ criterion.name }} — {{ criterion.score is null ? 'Недостаточно оснований' : criterion.score ~ ' из 2' }}</h3><ul>{% for check in criterion.checks %}<li><strong>{{ {'passed':'Предварительно выполнено','failed':'Предварительно не выполнено','unknown':'Недостаточно оснований'}[check.status] }}</strong><p>{{ check.explanation }}</p><p>{{ check.evidence }}</p></li>{% endfor %}</ul></article>{% endfor %}</section>{% endif %}
+{% endif %}<p id="taskMessage" role="status" aria-live="polite"></p></section>
+{% endif %}</main><footer class="footer"><span>место · У каждого есть своё.</span></footer></div><script src="/js/task.js" defer></script><script src="/js/auth.js" defer></script></body></html>

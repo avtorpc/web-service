@@ -3,7 +3,7 @@ const profile=UserStore.profile();
 function node(tag,text,cls){const e=document.createElement(tag);e.textContent=text;if(cls)e.className=cls;return e}
 function renderUser(){
   $('#newResume').disabled=false;
-  if(!profile){$('#userNotice').textContent='Чтобы открыть кабинет, зарегистрируйтесь и подтвердите email демонстрационным кодом.';$('#newResume').textContent='Зарегистрироваться';$('#newResume').onclick=()=>location.href='index.html?register=applicant';$('#userLogout').hidden=true;return}
+  if(!profile){$('#userNotice').textContent='Чтобы открыть кабинет, зарегистрируйтесь и подтвердите email демонстрационным кодом.';$('#newResume').textContent='Зарегистрироваться';$('#newResume').onclick=()=>location.href='index.html?register=applicant';return}
   renderUserApplications();
   $('#userName').textContent=profile.name;$('#userEmail').textContent=profile.email+' · подтверждено в деморежиме';
   let items;try{items=UserStore.list()}catch{$('#userStatus').textContent='Не удалось прочитать резюме из хранилища.';return}
@@ -18,7 +18,6 @@ function renderUser(){
     catch{$('#userStatus').textContent='Не удалось создать резюме. Проверьте хранилище браузера.';$('#newResume').disabled=false}
   };
 }
-$('#userLogout').onclick=()=>{try{sessionStorage.removeItem('mesto-demo-user');location.href='index.html'}catch{$('#userStatus').textContent='Не удалось завершить демосеанс.'}};
 const userApplications=document.createElement('section');userApplications.className='dashboard-list';$('main').append(userApplications);
 let activeChatId=null,chatQuery='',chatFilter='invited';
 const chatFilters=[['all','Все'],['rejected','Отказы'],['reviewing','На рассмотрении'],['unanswered','Без ответа'],['invited','Приглашения'],['favorites','Избранные']];

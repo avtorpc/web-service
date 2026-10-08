@@ -35,6 +35,9 @@ final class VerificationClient
         return $this->post('resend-code-email', $payload);
     }
 
+    public function cancel(array $payload): ResponseInterface { return $this->post('cancel', $payload); }
+    public function status(array $payload): ResponseInterface { return $this->post('status', $payload); }
+
     private function post(string $endpoint, array $payload): ResponseInterface
     {
         $ip = $this->requests->getMainRequest()?->getClientIp();
