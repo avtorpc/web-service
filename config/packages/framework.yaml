@@ -4,6 +4,10 @@ framework:
         utf8: true
     session:
         save_path: '%kernel.project_dir%/var/sessions/%kernel.environment%'
+        # Keep the server session through idle periods and browser restarts.
+        cookie_lifetime: 315360000
+        gc_probability: 0
+        gc_maxlifetime: 315360000
         cookie_httponly: true
         cookie_samesite: lax
         cookie_secure: auto

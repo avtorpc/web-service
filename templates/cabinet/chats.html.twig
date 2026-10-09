@@ -1,0 +1,16 @@
+<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="registration-csrf" content="{{ registration_csrf }}"><title>Отклики и чаты — место</title><link rel="stylesheet" href="/css/styles.css"><link rel="stylesheet" href="/css/chat-live.css?v=1"></head>
+<body><div class="wrap"><header><a class="logo" href="/">место</a><nav><a href="/">Главная</a><a href="/cabinet">Личный кабинет</a></nav>{% include 'prototype/auth-navigation.html.twig' with {hide_cabinet_link: true} %}</header><main class="chat-page" data-chat-role="{{ role }}">
+<h1>{{ role == 'employer' ? 'Соискатели и чаты' : 'Отклики и чаты' }}</h1>
+{% if chat_error %}<p role="alert">{{ chat_error }}</p>{% else %}
+<p id="chatConnection" role="status">Подключаем переписку…</p><p id="chatError" role="alert"></p>
+<div class="chat-layout"><section class="chat-list-panel" aria-label="Список откликов"><label>Поиск<input id="chatSearch" type="search" placeholder="Вакансия, компания или имя"></label>
+{% if role == 'employer' %}<label>Вакансия<select id="chatVacancy"><option value="">Все вакансии</option></select></label>{% endif %}
+<div id="chatFilters" class="chat-filters"></div><div id="chatList"></div></section>
+<section class="chat-thread" aria-label="Переписка"><div id="chatEmpty"><h2>Выберите отклик</h2><p>Здесь появятся резюме и переписка с участником отклика.</p></div>
+<div id="chatSelected" hidden><div class="chat-heading"><h2 id="chatTitle"></h2><a id="chatVacancyLink">Открыть вакансию</a><p id="chatStatus"></p>{% if role == 'applicant' %}<button id="chatFavorite" type="button">В избранное</button>{% endif %}</div>
+<details class="chat-resume" open><summary>Профиль, резюме и отклик</summary><div id="chatResume"></div></details>
+<div id="chatMessages" aria-live="polite" aria-label="Сообщения"></div>
+<form id="chatMessageForm"><label for="chatBody">Ваше сообщение</label><textarea id="chatBody" rows="4" maxlength="5000" required placeholder="Напишите сообщение"></textarea><button class="primary" type="submit">Отправить</button><p id="chatSendStatus" role="status"></p></form>
+{% if role == 'employer' %}<form id="chatDecisionForm"><h3>Решение по отклику</h3><label>Статус<select id="chatDecision"><option value="submitted">Без ответа</option><option value="reviewing">На рассмотрении</option><option value="invited">Приглашение</option><option value="rejected">Отказ</option></select></label><label>Оценка соответствия — от 0 до 100<input id="chatScore" type="number" min="0" max="100" step="1"></label><label>Комментарий<textarea id="chatComment" maxlength="5000" rows="3"></textarea></label><button type="submit">Сохранить решение</button><p id="chatDecisionStatus" role="status"></p></form>{% endif %}
+</div></section></div>{% endif %}</main><footer class="footer">место · У каждого есть своё.</footer></div>
+<script src="/chat/socket.io/socket.io.js" defer></script><script src="/js/chat-live.js?v=f6a9b1263c64" defer></script><script src="/js/auth.js?v=8a9e07bda20c" defer></script></body></html>

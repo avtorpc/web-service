@@ -19,7 +19,7 @@ final class CabinetController extends AbstractController
   $context=['authenticated'=>true,'auth_email'=>$session->get('auth_email'),'auth_expires_at'=>$this->auth->expiresAt($session),'registration_csrf'=>$session->get('registration_csrf'),'workspace'=>null,'assessment'=>null,'preferences'=>[],'cabinet_error'=>null,'assessment_error'=>null];
   $status=200;
   try{
-   $response=$this->catalog->request('GET','workspace',query:['testsPage'=>max(1,$request->query->getInt('testsPage',1))]);
+   $response=$this->catalog->request('GET','workspace',query:['testsPage'=>max(1,$request->query->getInt('testsPage',1)),'vacanciesPage'=>max(1,$request->query->getInt('vacanciesPage',1))]);
    if($response->getStatusCode()===401){$session->remove('auth_tokens');return $this->loginRedirect();}
    $context['workspace']=$response->toArray()['data'];
    if($context['workspace']['role']==='applicant'){
@@ -36,22 +36,33 @@ final class CabinetController extends AbstractController
  #[Route('/user.html',methods:['GET'],priority:20)]
  #[Route('/employer.html',methods:['GET'],priority:20)]
  public function legacy():Response {return new RedirectResponse('/cabinet',302,['Cache-Control'=>'private, no-store']);}
- #[Route('/cabinet/{action}',requirements:['action'=>'data|options|profile|preferences'],methods:['GET','POST'])]
+ #[Route('/cabinet/{action}',requirements:['action'=>'data|options|profile|preferences|vacancies'],methods:['GET','POST'])]
  public function api(Request $request,string $action):JsonResponse {
   $session=$request->getSession();
   if(!$this->auth->isAuthenticated($session))return new JsonResponse(['success'=>false,'error'=>['code'=>'AUTH_REQUIRED','message'=>'Войдите в аккаунт.']],401,['Cache-Control'=>'no-store']);
-  $mutation=in_array($action,['profile','preferences'],true);
+  $mutation=in_array($action,['profile','preferences','vacancies'],true);
   if(($mutation&&$request->getMethod()!=='POST')||(!$mutation&&$request->getMethod()!=='GET'))return new JsonResponse(['success'=>false],405,['Allow'=>$mutation?'POST':'GET','Cache-Control'=>'no-store']);
   if($mutation){$csrf=$session->get('registration_csrf');if(!is_string($csrf)||!hash_equals($csrf,(string)$request->headers->get('X-CSRF-Token')))return new JsonResponse(['success'=>false,'error'=>['code'=>'CSRF','message'=>'Обновите страницу.']],403,['Cache-Control'=>'no-store']);}
   try{
    $body=$mutation?$request->toArray():null;
-   [$method,$path]=match($action){'data'=>['GET','workspace'],'options'=>['GET','assessment/options'],'profile'=>['PATCH','profile'],'preferences'=>['POST','assessment/preferences']};
+   [$method,$path]=match($action){'data'=>['GET','workspace'],'options'=>['GET','assessment/options'],'profile'=>['PATCH','profile'],'preferences'=>['POST','assessment/preferences'],'vacancies'=>['POST','vacancies']};
    $query=$action==='options'&&$request->query->has('specializationId')?['specializationId'=>$request->query->getInt('specializationId')]:[];
    $response=$this->catalog->request($method,$path,$body,$query);$status=$response->getStatusCode();
    if($status===401)$session->remove('auth_tokens');
    return new JsonResponse($response->toArray(false),$status,['Cache-Control'=>'private, no-store']);
   }catch(HttpExceptionInterface $e){return new JsonResponse(['success'=>false,'error'=>['message'=>$e->getMessage()]],$e->getStatusCode(),['Cache-Control'=>'no-store']);}
   catch(\Throwable){return new JsonResponse(['success'=>false,'error'=>['code'=>'SERVICE_UNAVAILABLE','message'=>'Не удалось сохранить данные. Попробуйте позже.']],503,['Cache-Control'=>'no-store']);}
+ }
+ #[Route('/cabinet/vacancies/{id}/{action}', requirements:['action'=>'publish|unpublish'], methods:['POST'])]
+ public function publication(Request $request,string $id,string $action):JsonResponse {
+  $session=$request->getSession();
+  if(!$this->auth->isAuthenticated($session))return new JsonResponse(['success'=>false,'error'=>['message'=>'Войдите в аккаунт.']],401,['Cache-Control'=>'no-store']);
+  $csrf=$session->get('registration_csrf');
+  if(!is_string($csrf)||!hash_equals($csrf,(string)$request->headers->get('X-CSRF-Token')))return new JsonResponse(['success'=>false,'error'=>['message'=>'Обновите страницу.']],403,['Cache-Control'=>'no-store']);
+  try {
+   $response=$this->catalog->request('POST','vacancies/'.rawurlencode($id).'/'.$action,$request->toArray());
+   return new JsonResponse($response->toArray(false),$response->getStatusCode(),['Cache-Control'=>'private, no-store']);
+  } catch(\Throwable) {return new JsonResponse(['success'=>false,'error'=>['message'=>'Не удалось изменить публикацию. Попробуйте позже.']],503,['Cache-Control'=>'no-store']);}
  }
  private function loginRedirect():Response {return new RedirectResponse('/?login=1',302,['Cache-Control'=>'private, no-store']);}
 }

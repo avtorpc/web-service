@@ -1,12 +1,13 @@
 <!DOCTYPE html>
-<html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="registration-csrf" content="{{ registration_csrf }}"><title>Личный кабинет — место</title><link rel="stylesheet" href="/css/styles.css"><link rel="stylesheet" href="/css/cabinet.css"></head>
+<html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="registration-csrf" content="{{ registration_csrf }}"><title>Личный кабинет — место</title><link rel="stylesheet" href="/css/styles.css"><link rel="stylesheet" href="/css/cabinet.css?v=20261009-publish-1"></head>
 <body><div class="wrap"><header><a class="logo" href="/" aria-label="место — главная"><span class="mark"></span>место</a><nav><a href="/">Главная</a><a href="/cabinet" class="active">Личный кабинет</a></nav>{% include 'prototype/auth-navigation.html.twig' %}</header>
-<main class="cabinet-page">
+<main class="cabinet-page"><p><a class="primary" href="/cabinet/chats">Отклики и чаты</a></p>
 {% if cabinet_error %}<section class="cabinet-card"><h1>Личный кабинет</h1><p role="alert">{{ cabinet_error }}</p><a href="/cabinet" class="primary">Попробовать снова</a></section>
 {% else %}
 {% set p = workspace.profile %}{% set applicant = workspace.role == 'applicant' %}
 <div class="cabinet-heading"><div class="eyebrow">{{ applicant ? 'Личный кабинет соискателя' : 'Личный кабинет работодателя' }}</div><h1>{{ applicant ? p.display_name : p.public_name }}</h1><p>{{ p.contact_email }} · Email подтверждён</p></div>
-<div class="cabinet-columns"><section class="cabinet-card"><h2>{{ applicant ? 'Мой профиль' : 'Профиль работодателя' }}</h2>
+{% if not applicant %}<div class="employer-navigation" aria-label="Разделы кабинета"><a href="#vacancies">Мои вакансии</a><a href="#vacancy-tests">Тестовые задания</a><a href="#employer-profile">Профиль</a></div>{% endif %}
+<div class="cabinet-columns"><section id="employer-profile" class="cabinet-card"><h2>{{ applicant ? 'Мой профиль' : 'Профиль работодателя' }}</h2>
 <form id="profileForm" class="cabinet-form" data-role="{{ workspace.role }}">
 {% if applicant %}
 <label>Имя<input name="display_name" value="{{ p.display_name }}" required maxlength="100" autocomplete="name"></label>
@@ -22,12 +23,11 @@
 {% endif %}
 <label>Город<input name="city" value="{{ p.city }}" maxlength="100" autocomplete="address-level2"></label>
 <button class="primary" type="submit">Сохранить профиль</button><p id="profileStatus" role="status" aria-live="polite"></p></form></section>
-<section class="cabinet-card"><h2>{{ applicant ? 'Мои документы' : 'Мои вакансии' }}</h2>
+<section class="cabinet-card"><h2>{{ applicant ? 'Мои документы' : 'Обзор кабинета' }}</h2>
 <div class="cabinet-counters">{% for key, count in workspace.counts %}<div><strong>{{ count }}</strong><span>{{ {'resumes':'Резюме','applications':'Отклики','tests':'Задачи','vacancies':'Вакансии','offers':'Предложения'}[key] }}</span></div>{% endfor %}</div>
-<p>{{ applicant ? 'У вас пока нет резюме и откликов.' : 'У вас пока нет вакансий и откликов соискателей.' }}</p>
-<p class="cabinet-note">Создание и публикация документов будут доступны на следующем этапе.</p>
-{% if not applicant %}<h3>Квалификация соискателей</h3><p>Квалификационные задачи проходят соискатели. Работодателю проходить их не требуется.</p><p class="cabinet-note">Предварительные результаты тестирования не являются подтверждённым грейдом.</p>{% endif %}
+{% if applicant %}<p>Резюме можно отправить вместе с откликом на странице опубликованной вакансии. Отправленный документ и переписка доступны в разделе «Отклики и чаты».</p>{% else %}<h3>От вакансии к подбору</h3><p>Сохраните условия и требования в черновике вакансии. Все вакансии доступны в списке ниже.</p><a href="/cabinet/vacancies/new" class="primary">Создать вакансию</a><h3>Тестовые задания</h3><p class="cabinet-note">Для каждой вакансии предусмотрен отдельный блок задания. Генерация пока не подключена.</p>{% endif %}
 </section></div>
+{% if not applicant %}{% include 'cabinet/employer.html.twig' %}{% endif %}
 {% if applicant %}<section class="cabinet-card assessment-section" id="assessmentSection"><div class="eyebrow">Профессиональные навыки</div><h2>Выбор следующего задания</h2><p>Выберите специализацию, предполагаемый грейд, от одной до трёх компетенций и технологии. Сохранённый выбор восстановится при возвращении в кабинет.</p><p class="cabinet-note">У вас один текущий выбор. Его изменение не меняет ранее полученные задания. Предполагаемый грейд не подтверждает квалификацию.</p>
 {% if assessment_error %}<p role="alert">{{ assessment_error }}</p><a href="/cabinet">Обновить страницу</a>
 {% else %}<form id="assessmentForm" class="cabinet-form"><div class="cabinet-columns">
@@ -40,4 +40,4 @@
 {% if workspace.tests_pages > 1 %}<nav aria-label="Страницы заданий">{% if workspace.tests_page > 1 %}<a href="/cabinet?testsPage={{ workspace.tests_page - 1 }}#myTasks">Предыдущие</a>{% endif %}<span>{{ workspace.tests_page }} из {{ workspace.tests_pages }}</span>{% if workspace.tests_page < workspace.tests_pages %}<a href="/cabinet?testsPage={{ workspace.tests_page + 1 }}#myTasks">Следующие</a>{% endif %}</nav>{% endif %}</section>{% endif %}
 {% endif %}
 </main><footer class="footer"><span>место · У каждого есть своё.</span></footer></div>
-<script type="application/json" id="assessmentData">{{ assessment_json|raw }}</script><script src="/js/cabinet.js" defer></script><script src="/js/auth.js" defer></script></body></html>
+<script type="application/json" id="assessmentData">{{ assessment_json|raw }}</script><script src="/js/cabinet.js" defer></script><script src="/js/employer-cabinet.js?v=713fadc46af9" defer></script><script src="/js/auth.js?v=8a9e07bda20c" defer></script></body></html>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="registration-csrf" content="{{ registration_csrf }}"><title>{{ vacancy ? 'Редактирование вакансии' : 'Новая вакансия' }} — место</title><link rel="stylesheet" href="/css/styles.css"><link rel="stylesheet" href="/css/cabinet.css?v=20261009-publish-1"></head>
+<body><div class="wrap"><header><a class="logo" href="/" aria-label="место — главная"><span class="mark"></span>место</a><nav><a href="/">Главная</a><a href="/cabinet" class="active">Личный кабинет</a></nav>{% include 'prototype/auth-navigation.html.twig' with {hide_cabinet_link: true} %}</header>
+<main class="cabinet-page"><a class="vacancy-back" href="/cabinet#vacancies">← К списку вакансий</a>
+{% if error %}<section class="cabinet-card"><h1>Вакансия</h1><p role="alert">{{ error }}</p></section>
+{% else %}
+{% set c = vacancy.content|default({}) %}
+<div class="cabinet-heading"><div class="eyebrow">Кабинет работодателя</div><h1>{{ vacancy ? 'Редактирование вакансии' : 'Новая вакансия' }}</h1><p>Сохраните черновик и продолжите заполнение позже. Для публикации вернитесь к списку вакансий и нажмите «Опубликовать».</p></div>
+<form id="vacancyForm" class="cabinet-form" data-id="{{ vacancy.id|default('') }}" data-version="{{ vacancy.version|default(0) }}">
+<section class="cabinet-card"><div class="eyebrow">01 · Кого ищем</div><h2>Специалист</h2><div class="cabinet-columns">
+<label>Название вакансии *<input name="title" required maxlength="150" value="{{ vacancy.title|default('') }}" placeholder="Например, PHP-разработчик"></label>
+<label>Специальность<input name="specialty" maxlength="150" value="{{ c.specialty|default('') }}" placeholder="Backend-разработка"></label>
+<label>Опыт<input name="experience" maxlength="100" value="{{ c.experience|default('') }}" placeholder="Например, от 1 до 3 лет"></label>
+</div></section>
+<section class="cabinet-card"><div class="eyebrow">02 · Условия работы</div><h2>Формат и доход</h2><div class="cabinet-columns">
+<label>Формат<select name="format"><option value="">Не указан</option>{% for value, label in {'office':'Офис','hybrid':'Гибрид','remote':'Удалённо'} %}<option value="{{ value }}" {{ c.format|default('') == value ? 'selected' : '' }}>{{ label }}</option>{% endfor %}</select></label>
+<label>Занятость<select name="employment"><option value="">Не указана</option>{% for value, label in {'full':'Полная','part':'Частичная','project':'Проектная','internship':'Стажировка'} %}<option value="{{ value }}" {{ c.employment|default('') == value ? 'selected' : '' }}>{{ label }}</option>{% endfor %}</select></label>
+<label>Города через запятую<input name="cities" maxlength="500" value="{{ c.cities|default('') }}" placeholder="Москва, Санкт-Петербург"></label>
+<label>График<input name="schedule" maxlength="200" value="{{ c.schedule|default('') }}" placeholder="5/2, гибкое начало дня"></label>
+<label>Доход от, ₽<input name="salary_from" type="number" min="0" max="999999999999" step="1" value="{{ c.salary_from|default('') }}"></label>
+<label>Доход до, ₽<input name="salary_to" type="number" min="0" max="999999999999" step="1" value="{{ c.salary_to|default('') }}"></label>
+</div><label class="cabinet-check"><input name="salary_negotiable" type="checkbox" {{ c.salary_negotiable|default(false) ? 'checked' : '' }}><span>Доход по договорённости</span></label></section>
+<section class="cabinet-card"><div class="eyebrow">03 · Задачи и ожидания</div><h2>О работе</h2>
+<label>Краткое описание<textarea name="description" rows="4" maxlength="5000">{{ c.description|default('') }}</textarea></label>
+<label>Задачи<textarea name="tasks" rows="4" maxlength="5000">{{ c.tasks|default('') }}</textarea></label>
+<label>Ключевые навыки через запятую<input name="skills" maxlength="1000" value="{{ c.skills|default('') }}" placeholder="PHP, Symfony, PostgreSQL"></label>
+<label>Требования<textarea name="requirements" rows="4" maxlength="5000">{{ c.requirements|default('') }}</textarea></label>
+<label>Преимущества<textarea name="benefits" rows="3" maxlength="5000">{{ c.benefits|default('') }}</textarea></label></section>
+<section class="cabinet-card" id="assignment"><div class="eyebrow">04 · Проверочное задание</div><h2>Тестовое задание</h2><p class="cabinet-note">Задание будет генерироваться с помощью ИИ и сохраняться в связке с этой вакансией. Генерация пока не подключена.</p><button type="button" class="nav-btn" data-assignment-stub>Получить тестовое задание</button><p class="assignment-stub-status" role="status" aria-live="polite" hidden>Это заглушка: генерация пока недоступна. Сохраните вакансию — её блок тестирования появится в кабинете.</p></section>
+<section class="cabinet-card"><div class="eyebrow">05 · Компания и контакт</div><h2>С кем связаться</h2><div class="cabinet-columns">
+<label>Компания / публичное название<input name="company" maxlength="150" value="{{ c.company|default(profile.public_name) }}"></label>
+<label>Контактное лицо<input name="contact_name" maxlength="100" value="{{ c.contact_name|default(profile.contact_name) }}" autocomplete="name"></label>
+<label>Контактный email<input name="contact_email" type="email" maxlength="254" value="{{ c.contact_email|default(profile.contact_email) }}" autocomplete="email"></label>
+</div></section>
+<div class="vacancy-save-panel"><p class="cabinet-note">Для сохранения черновика достаточно названия. Остальные поля можно заполнить позже.</p><div class="task-actions"><button class="primary" type="submit">Сохранить черновик</button><a href="/cabinet#vacancies" class="nav-btn">К списку вакансий</a></div><p id="vacancyStatus" role="status" aria-live="polite"></p></div>
+</form>{% if vacancy %}<section class="cabinet-card"><h2>Соискатели и чаты</h2><p>Отклики и переписка по этой вакансии.</p><a href="/cabinet/chats?vacancy={{ vacancy.id }}">Открыть соискателей и чаты</a></section>{% endif %}{% endif %}
+</main><footer class="footer"><b>место</b><span>Личный кабинет</span></footer></div><script src="/js/auth-session.js" defer></script><script src="/js/employer-cabinet.js?v=713fadc46af9" defer></script></body></html>

@@ -1,0 +1,33 @@
+<section class="cabinet-card employer-section" id="vacancies">
+    <div class="employer-section-heading"><div><div class="eyebrow">Подбор сотрудников</div><h2>Мои вакансии <span class="employer-count">{{ workspace.counts.vacancies }}</span></h2></div><a class="primary" href="/cabinet/vacancies/new">Создать вакансию</a></div>
+    <p class="cabinet-note">Сохраните черновик, заполните обязательные поля и нажмите «Опубликовать». Опубликованная вакансия появится на главной странице.</p>
+    {% if workspace.vacancies %}
+        <label class="vacancy-search">Поиск на этой странице<input id="vacancySearch" type="search" placeholder="Название вакансии или город" autocomplete="off"></label>
+        <div class="employer-vacancy-list">
+        {% for vacancy in workspace.vacancies %}
+            {% set c = vacancy.content %}
+            <article class="employer-vacancy" data-vacancy-search="{{ vacancy.title }} {{ c.cities|default('') }}">
+                <div class="employer-section-heading"><h3>{{ vacancy.title }}</h3><span class="vacancy-badge">{{ {'draft':'Черновик','published':'Опубликована','archived':'В архиве'}[vacancy.status] }}</span></div>
+                <p class="vacancy-details">{{ {'office':'Офис','hybrid':'Гибрид','remote':'Удалённо'}[c.format|default('')]|default('Формат не указан') }}{% if c.cities|default('') %} · {{ c.cities }}{% endif %}{% if c.specialty|default('') %} · {{ c.specialty }}{% endif %}</p>
+                <p class="vacancy-details">{% if c.salary_negotiable|default(false) %}Доход по договорённости{% elseif c.salary_from|default('') or c.salary_to|default('') %}{% if c.salary_from|default('') %}от {{ c.salary_from }}{% endif %} {% if c.salary_to|default('') %}до {{ c.salary_to }}{% endif %} ₽{% else %}Доход не указан{% endif %}</p>
+                <div class="employer-vacancy-footer"><span>Изменена {{ vacancy.updated_at|date('d.m.Y H:i', 'Europe/Moscow') }} (Москва)</span><div>{% if vacancy.status == 'draft' %}<a href="/cabinet/vacancies/{{ vacancy.id }}/edit">Редактировать</a>{% endif %} <a href="/cabinet/chats?vacancy={{ vacancy.id }}">Соискатели и чаты</a> <a href="#assignment-{{ vacancy.id }}">Тестовое задание</a>{% if vacancy.status == 'published' %} <a href="/vacancy.html?id={{ vacancy.id }}">Посмотреть на сайте</a>{% endif %}</div></div>
+                {% if vacancy.status in ['draft','published'] %}<div class="vacancy-publication"><button type="button" class="nav-btn" data-publication-action="{{ vacancy.status == 'draft' ? 'publish' : 'unpublish' }}" data-id="{{ vacancy.id }}" data-version="{{ vacancy.version }}">{{ vacancy.status == 'draft' ? 'Опубликовать' : 'Снять с публикации' }}</button><p role="status" aria-live="polite"></p></div>{% endif %}
+            </article>
+        {% endfor %}
+        </div>
+        <p id="vacancySearchEmpty" class="employer-empty" hidden>По вашему запросу вакансий не найдено. Измените поисковую строку.</p>
+        {% if workspace.vacancies_pages > 1 %}<div class="employer-pagination">{% if workspace.vacancies_page > 1 %}<a href="/cabinet?vacanciesPage={{ workspace.vacancies_page - 1 }}#vacancies">← Назад</a>{% endif %}<span>Страница {{ workspace.vacancies_page }} из {{ workspace.vacancies_pages }}</span>{% if workspace.vacancies_page < workspace.vacancies_pages %}<a href="/cabinet?vacanciesPage={{ workspace.vacancies_page + 1 }}#vacancies">Далее →</a>{% endif %}</div>{% endif %}
+    {% else %}<div class="employer-empty"><h3>Создайте первую вакансию</h3><p>Опишите специалиста, условия работы и задачи. К вакансии можно будет привязать сгенерированное тестовое задание.</p><a href="/cabinet/vacancies/new">Добавить вакансию →</a></div>{% endif %}
+</section>
+<section class="cabinet-card employer-section" id="vacancy-tests">
+    <div class="eyebrow">Проверка навыков</div><h2>Тестовые задания к вакансиям</h2>
+    <p class="cabinet-note">Задания связаны с конкретными вакансиями. Генерация с помощью ИИ будет подключена на следующем этапе.</p>
+    {% for vacancy in workspace.vacancies %}
+        <article class="employer-assignment" id="assignment-{{ vacancy.id }}">
+            <div><h3>{{ vacancy.title }}</h3>{% if vacancy.optional_assignment %}<p>{{ vacancy.optional_assignment.title|default('Задание сохранено') }}</p>{% else %}<p>Тестовое задание ещё не создано.</p>{% endif %}<span class="vacancy-badge">Генерация пока недоступна</span></div>
+            <button type="button" class="nav-btn" data-assignment-stub>Получить тестовое задание</button>
+            <p class="assignment-stub-status" role="status" aria-live="polite" hidden>Генерация тестового задания для этой вакансии пока не подключена. Вакансия сохранена; вернитесь к этому разделу после подключения функции.</p>
+        </article>
+    {% else %}<div class="employer-empty"><p>Сначала создайте вакансию — здесь появится её блок тестирования.</p></div>{% endfor %}
+    {% if workspace.vacancies_pages > 1 %}<p class="cabinet-note">Показаны задания для вакансий на текущей странице списка.</p>{% endif %}
+</section>

@@ -1,16 +1,20 @@
 <!DOCTYPE html>
-<html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Вакансия — место</title><link rel="stylesheet" href="/css/styles.css"><link rel="stylesheet" href="/css/vacancy-detail.css"><meta name="registration-csrf" content="{{ registration_csrf }}"></head>
-<body><div class="wrap"><header><a class="logo" href="./index.html" aria-label="место — главная"><span class="mark"></span>место</a><nav><a href="index.html#vacancies" class="active" id="allNav">Вакансии</a><a href="index.html#workers" id="workersNav">Работники</a></nav><span class="prototype">ПРОТОТИП</span>{% include 'prototype/auth-navigation.html.twig' %}</header>
+<html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ public_vacancy ? public_vacancy.title : 'Вакансия' }} — место</title><link rel="stylesheet" href="/css/styles.css"><link rel="stylesheet" href="/css/vacancy-detail.css"><meta name="registration-csrf" content="{{ registration_csrf }}"></head>
+<body><div class="wrap"><header><a class="logo" href="./index.html" aria-label="место — главная"><span class="mark"></span>место</a><nav><a href="index.html#vacancies" class="active" id="allNav">Вакансии</a><a href="index.html#workers" id="workersNav">Работники</a></nav>{% include 'prototype/auth-navigation.html.twig' %}</header>
 <main class="vacancy-detail-page" id="vacancyDetailRoot">
-<div class="vacancy-breadcrumb"><a href="index.html#vacancies">← Все вакансии</a><span id="vacancyDate"></span></div>
-<section class="vacancy-detail-hero"><div class="eyebrow" id="vacancyCompany"></div><h1 id="vacancyTitle"></h1><div class="vacancy-detail-pay" id="vacancySalary"></div><div class="tags" id="vacancyMeta"></div><p id="vacancySummary"></p></section>
-<div class="vacancy-detail-layout"><div class="vacancy-detail-content"><div id="vacancyTaskInfo"></div>
-<section class="vacancy-detail-section"><h2>Чем предстоит заниматься</h2><p id="vacancyTasks"></p></section>
-<section class="vacancy-detail-section"><h2>Ключевые навыки</h2><div class="tags" id="vacancySkills"></div></section>
-<section class="vacancy-detail-section"><h2>Основные требования</h2><ul id="vacancyRequirements"></ul></section>
-<p class="assessment-note">Демонстрационная вакансия. Отклик сохраняется только в этом браузере; реальная отправка работодателю не подключена.</p>
-</div><aside class="vacancy-detail-aside"><div class="vacancy-detail-action"><h2>Подходит вам?</h2><p>Выберите резюме и расскажите о себе.</p><button type="button" class="primary" id="applyVacancy">Откликнуться</button><p id="vacancyApplyHint" class="assessment-note"></p></div></aside></div>
-</main><footer class="footer"><span><b>место</b> · У каждого есть своё.</span><a href="index.html#vacancies">Все вакансии ↗</a></footer></div>
+{% if catalog_error %}<h1>Вакансии временно недоступны</h1><p role="alert">{{ catalog_error }}</p><a href="/">← Все вакансии</a>
+{% elseif not public_vacancy %}<h1>Вакансия не найдена</h1><p>Ссылка могла устареть или вакансия снята с публикации.</p><a href="/">← Все вакансии</a>
+{% else %}{% set v = public_vacancy %}
+<div class="vacancy-breadcrumb"><a href="/#vacancies">← Все вакансии</a><span>Опубликовано {{ v.publishedTimestamp|date('d.m.Y', 'Europe/Moscow') }}</span></div>
+<section class="vacancy-detail-hero"><div class="eyebrow">{{ v.company }}</div><h1>{{ v.title }}</h1><div class="vacancy-detail-pay">{{ v.range }}</div><div class="tags"><span class="tag">{{ v.city }}</span><span class="tag">{{ v.format }}</span><span class="tag">Опыт: {{ v.experience }}</span><span class="tag">{{ v.employment }}</span></div><p style="white-space:pre-line">{{ v.text }}</p></section>
+<div class="vacancy-detail-layout"><div class="vacancy-detail-content">
+<section class="vacancy-detail-section"><h2>Чем предстоит заниматься</h2><p style="white-space:pre-line">{{ v.tasks }}</p></section>
+<section class="vacancy-detail-section"><h2>Ключевые навыки</h2><div class="tags">{% for skill in v.skills %}<span class="tag">{{ skill }}</span>{% endfor %}</div></section>
+<section class="vacancy-detail-section"><h2>Основные требования</h2><ul>{% for requirement in v.requirements %}<li>{{ requirement }}</li>{% endfor %}</ul></section>
+{% if v.benefits %}<section class="vacancy-detail-section"><h2>Преимущества</h2><p style="white-space:pre-line">{{ v.benefits }}</p></section>{% endif %}
+{% if v.schedule %}<section class="vacancy-detail-section"><h2>График</h2><p>{{ v.schedule }}</p></section>{% endif %}
+</div><aside class="vacancy-detail-aside"><div class="vacancy-detail-action"><h2>Подходит вам?</h2>{% if authenticated %}<form id="applicationForm"><input type="hidden" name="vacancyId" value="{{ v.id }}"><label>Название резюме<input name="resumeTitle" required maxlength="150" placeholder="Например, PHP-разработчик"></label><label>Резюме<textarea name="resumeText" required maxlength="10000" rows="6" placeholder="Опыт, навыки и проекты"></textarea></label><label>Сопроводительное сообщение<textarea name="coverLetter" maxlength="5000" rows="3"></textarea></label><button type="submit" class="primary">Откликнуться</button><p id="applicationStatus" role="status"></p></form>{% else %}<p>Войдите как соискатель, чтобы отправить резюме и начать переписку.</p><a href="/?login=1" class="primary">Войти</a>{% endif %}<p class="assessment-note">Генерация тестового задания к вакансии пока не подключена.</p></div></aside></div>
+{% endif %}</main><footer class="footer"><span><b>место</b> · У каждого есть своё.</span><a href="index.html#vacancies">Все вакансии ↗</a></footer></div>
 {% if not authenticated %}
 <dialog id="authModal" aria-labelledby="authTitle">
 <button type="button" class="close" id="closeAuth" aria-label="Закрыть окно входа">×</button>
@@ -41,4 +45,4 @@
 <section id="emailVerification" hidden aria-labelledby="verifyHeading"><h3 id="verifyHeading">Подтвердите почту</h3><p id="verifyEmail"></p><form id="verifyForm" class="auth-form"><label for="emailCode">Код из письма *</label><input id="emailCode" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required placeholder="6 цифр"><button type="submit" class="primary">Подтвердить email</button></form><div class="verification-actions"><button type="button" id="resendEmailCode">Отправить код повторно</button><button type="button" id="changeVerifyEmail">Указали неверный email? Начать заново</button></div><p id="verifyStatus" role="status"></p></section><p id="authStatus" class="auth-status" role="status" aria-live="polite"></p>
 </dialog>
 {% endif %}
-<script src="/js/user-store.js" defer></script><script src="/js/data.js" defer></script><script src="/js/employer-store.js" defer></script><script src="/js/assessment-store.js" defer></script><script src="/js/application.js" defer></script><script src="/js/vacancy-view.js" defer></script><script src="/js/auth.js" defer></script></body></html>
+<script src="/js/apply.js?v=1" defer></script><script src="/js/auth.js?v=8a9e07bda20c" defer></script></body></html>

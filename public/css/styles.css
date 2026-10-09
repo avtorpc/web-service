@@ -99,3 +99,6 @@
 #logoutForm { display: flex; align-items: center; gap: 12px; margin: 0; }
 .auth-account-email { font-size: 13px; overflow-wrap: anywhere; }
 @media (max-width: 600px) { .auth-account-email { display: none; } }
+
+/* Keep the complete catalog filter panel available on narrow screens too. */
+@media(max-width:680px){aside>.filter-title{display:flex}aside>.group{display:block}}

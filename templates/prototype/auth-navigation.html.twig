@@ -1,5 +1,5 @@
 {% if authenticated %}
-{% if app.request.attributes.get('_route') != 'cabinet' %}<a href="/cabinet" class="nav-btn" id="cabinetLink">Личный кабинет</a>{% endif %}
+{% if app.request.attributes.get('_route') != 'cabinet' and not hide_cabinet_link|default(false) %}<a href="/cabinet" class="nav-btn" id="cabinetLink">Личный кабинет</a>{% endif %}
 <form action="{{ path('logout') }}" method="post" id="logoutForm" data-session-expires-at="{{ auth_expires_at }}">
     <input type="hidden" name="_csrf_token" value="{{ registration_csrf }}">
     {% if auth_email %}<span class="auth-account-email">{{ auth_email }}</span>{% endif %}

@@ -1,8 +1,9 @@
 let dayOffset = 0;
 let currentView="jobs";
-let publishedOnly=false;
-let catalogError=false;
-function vacancyCatalog(){try{const records=EmployerStore.published();catalogError=false;return [...records,...jobs]}catch{catalogError=true;return jobs}}
+let publishedOnly=true;
+const publicCatalog=JSON.parse(document.querySelector('#vacancyCatalogData').textContent);
+let catalogError=!!publicCatalog.error;
+function vacancyCatalog(){return publicCatalog.vacancies}
 const currentRecords=()=>currentView==="workers"?resumes:vacancyCatalog();
 function safeCard(record){const escape=value=>String(value==null?'':value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));const copy={...record};['company','logo','title','range','text','city','format','experience'].forEach(key=>copy[key]=escape(record[key]));return copy}
 const $=s=>document.querySelector(s);let saved=new Set();try{saved=new Set(JSON.parse(localStorage.getItem('mesto-saved')||'[]'))}catch{}let limit=3;
@@ -20,6 +21,17 @@ function changeDay(offset) {
 $('#olderDay').onclick = () => changeDay(dayOffset + 1);
 $('#newerDay').onclick = () => changeDay(dayOffset - 1);
 $('#todayDay').onclick = () => changeDay(0);
+function experienceFilterValue(value) {
+  const text=String(value||'').trim();
+  const normalized=text.toLowerCase().replace(/[–—]/g,'-').replace(/\s+/g,' ');
+  if(normalized==='без опыта')return 'Без опыта';
+  if(/^(?:от )?1\s*-\s*3 (?:года|лет)$/.test(normalized))return '1–3 года';
+  if(/^(?:от )?3\s*-\s*6 (?:года|лет)$/.test(normalized))return '3–6 лет';
+  if(/^более 6 (?:лет|года)$/.test(normalized))return 'Более 6 лет';
+  const numeric=normalized.match(/^(\d+(?:[.,]\d+)?)\s*(?:лет|года?|год)?$/);
+  if(numeric){const years=Number(numeric[1].replace(',','.'));return years===0?'Без опыта':years<3?'1–3 года':years<=6?'3–6 лет':'Более 6 лет';}
+  return text;
+}
 function buildCatalogs() {
   const data = currentRecords();
   $('#specialtySuggestions').replaceChildren();
@@ -36,7 +48,10 @@ function buildCatalogs() {
   });
   [['city','cityOptions'],['format','formatOptions'],['experience','experienceOptions']].forEach(([field,id])=>{
     const list=$('#'+id);list.replaceChildren();
-    [...new Set(data.flatMap(item=>field==='city'&&item.cities&&item.cities.length?item.cities:[item[field]]))].sort((a,b)=>a.localeCompare(b,'ru')).forEach(value=>{
+    const defaults=field==='format'?['В офисе','Гибрид','Удалённо']:field==='experience'?['Без опыта','1–3 года','3–6 лет','Более 6 лет']:[];
+    const observed=data.flatMap(item=>field==='city'&&item.cities&&item.cities.length?item.cities:[field==='experience'?experienceFilterValue(item.experience):item[field]]).filter(Boolean);
+    const extra=[...new Set(observed)].filter(value=>!defaults.includes(value)).sort((a,b)=>a.localeCompare(b,'ru'));
+    [...defaults,...extra].forEach(value=>{
       const label=document.createElement('label');label.className='check';
       const input=document.createElement('input');input.type='checkbox';input.name=field;input.value=value;
       label.append(input,document.createTextNode(value));list.append(label);
@@ -44,7 +59,7 @@ function buildCatalogs() {
   });
 }
 function switchView(view) {
-  currentView=view;publishedOnly=false;dayOffset=0;limit=3;
+  currentView=view;publishedOnly=view==='jobs';dayOffset=0;limit=3;
   const workers=view==='workers';
   $('#myResume').hidden=workers;
   $('#createVacancy').hidden=!workers;
@@ -59,14 +74,14 @@ function switchView(view) {
   $('#query').setAttribute('aria-label',workers?'Поиск резюме':'Поиск вакансий');
   $('#specialty').placeholder=workers?'Введите специальность кандидата':'Введите название вакансии';
   $('#searchForm .primary').textContent=workers?'Найти работников ↗':'Найти работу ↗';
-  $('#salaryTitle').textContent=workers?'Ожидаемый доход':'Уровень дохода';
+  $('#salaryTitle').textContent='Ожидаемый доход';
   $('#salary').placeholder=workers?'До, ₽ в месяц':'От, ₽ в месяц';
   $('#salary').setAttribute('aria-label',workers?'Максимальный ожидаемый доход кандидата':'Минимальная зарплата');
-  $('#requirementsTitle').textContent=workers?'Квалификация и качества':'Основные требования';
+  $('#requirementsTitle').textContent='Квалификация и качества';
   $('.skills-help').textContent=workers?'Покажем резюме хотя бы с одним выбранным навыком.':'Покажем вакансии хотя бы с одним выбранным навыком.';
-  $('.requirements-filter .skills-help').textContent=workers?'Покажем резюме хотя бы с одним выбранным качеством.':'Покажем вакансии хотя бы с одним выбранным требованием.';
+  $('.requirements-filter .skills-help').textContent=workers?'Покажем резюме хотя бы с одним выбранным качеством.':'Покажем вакансии хотя бы с одним выбранным качеством или требованием.';
   $('#load').textContent=workers?'Показать ещё резюме ↓':'Показать ещё вакансии ↓';
-  $('.footer span:last-child').textContent=workers?'Демонстрационные резюме · HTML-прототип, 2026':'Демонстрационные вакансии · HTML-прототип, 2026';
+  $('.footer span:last-child').textContent=workers?'Демонстрационные резюме · HTML-прототип, 2026':'Вакансии работодателей';
   document.title=workers?'место — поиск работников':'место — работа, которая вам подходит';
   buildCatalogs();buildSkillsFilter();render();
 }
@@ -140,10 +155,10 @@ function activeFilterGroups() {
     { key: 'specialty', label: 'Специальность', values: [$('#specialty').value.trim()].filter(Boolean) },
     { key: 'city', label: 'Города', values: checkedValues('city') },
     { key: 'format', label: 'Формат работы', values: checkedValues('format') },
-    { key: 'salary', label: currentView==='workers'?'Ожидаемый доход':'Уровень дохода', values: salary > 0 ? [(currentView==='workers'?'До ':'От ') + salary.toLocaleString('ru-RU') + ' ₽ в месяц'] : [] },
+    { key: 'salary', label: 'Ожидаемый доход', values: salary > 0 ? [(currentView==='workers'?'До ':'От ') + salary.toLocaleString('ru-RU') + ' ₽ в месяц'] : [] },
     { key: 'experience', label: 'Опыт работы', values: checkedValues('experience') },
     { key: 'skill', label: 'Навыки', values: checkedValues('skill') },
-    { key: 'requirement', label: currentView==='workers'?'Квалификация и качества':'Основные требования', values: checkedValues('requirement') },
+    { key: 'requirement', label: 'Квалификация и качества', values: checkedValues('requirement') },
 
   ].filter(group => group.values.length);
 }
@@ -276,11 +291,11 @@ $('#filtersModal').addEventListener('click',event=>{
   if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)$('#filtersModal').close();
 });
 
-function render(){const specialty=$('#specialty').value,cities=checkedValues('city'),min=Number($('#salary').value),formats=[...document.querySelectorAll('[name=format]:checked')].map(e=>e.value),exp=[...document.querySelectorAll('[name=experience]:checked')].map(e=>e.value),skills=[...document.querySelectorAll('[name=skill]:checked')].map(e=>e.value),requirements=[...document.querySelectorAll('[name=requirement]:checked')].map(e=>e.value);let filtered=currentRecords().filter(j=>(currentView==='jobs'&&publishedOnly?!!j.key:j.publishedAt===dateDaysAgo(dayOffset))&&matchesSpecialty(j,specialty)&&matchesQuery(j)&&(!cities.length||cities.some(city=>(j.cities||[j.city]).includes(city)))&&(currentView==='workers'?(!min||j.salary<=min):j.salary>=min)&&(!formats.length||formats.includes(j.format))&&(!exp.length||exp.includes(j.experience))&&(!skills.length||skills.some(skill=>(j.skills||[]).includes(skill)))&&(!requirements.length||requirements.some(item=>(j.requirements||[]).includes(item))));if($('#sort').value==='salary')filtered.sort((a,b)=>b.salary-a.salary);else filtered.sort((a,b)=>b.publishedAt.localeCompare(a.publishedAt));$('#resultsTitle').textContent=currentView==='jobs'&&publishedOnly?'Опубликованные вакансии работодателей':dayOffset===0?(currentView==='workers'?'Резюме, опубликованные сегодня':'Вакансии, открытые сегодня'):(currentView==='workers'?'Резюме за ':'Вакансии за ')+displayDate(dateDaysAgo(dayOffset));const total=document.createElement('span');total.textContent=filtered.length+' найдено';$('#resultsTitle').append(total);$('#dayNavigation').hidden=currentView==='jobs'&&publishedOnly;$('#catalogScope').hidden=currentView!=='jobs';$('#publishedCatalog').setAttribute('aria-pressed',String(publishedOnly));$('#dailyCatalog').setAttribute('aria-pressed',String(!publishedOnly));$('#catalogNotice').textContent=catalogError?'Не удалось прочитать опубликованные вакансии. Проверьте доступ к хранилищу браузера и обновите страницу.':'';$('#dayLabel').textContent=(dayOffset===0?'Сегодня · ':dayOffset===1?'Вчера · ':'')+displayDate(dateDaysAgo(dayOffset));$('#newerDay').disabled=dayOffset===0;$('#todayDay').disabled=dayOffset===0;updateFilterSummary();renderFilterChips();$('#jobs').innerHTML=filtered.slice(0,limit).map(safeCard).map(j=>`<article class="job"><div class="job-top"><div class="company"><span class="company-logo">${j.logo}</span>${j.company}<span title="Демонстрационные данные">·</span></div><div class="job-meta"><span class="date">${publicationLabel(j)}</span><button class="save ${saved.has(j.id)?'saved':''}" data-save="${j.id}" aria-label="${saved.has(j.id)?'Удалить из избранного':'Добавить в избранное'}" aria-pressed="${saved.has(j.id)}">${bookmark}</button></div></div><h3>${j.title}</h3><div class="pay">${j.range}<small>${currentView==='workers'?'ожидаемый доход':'на руки'}</small></div><p class="description">${j.text}</p>${currentView==='jobs'&&j.task?`<p class="job-assessment-hint">Проверочное задание · по желанию · +${j.task.points} баллов</p>`:''}<div class="job-bottom"><div class="tags"><span class="tag">${j.city}</span><span class="tag">${j.format}</span><span class="tag">${j.experience}</span></div><div class="job-actions">${currentView==='jobs'?`<button type="button" class="primary quick-apply" data-apply="${j.id}">Откликнуться</button>`:''}<a class="details" href="${currentView==='workers'?'resume.html':'vacancy.html'}?id=${j.id}">Подробнее <span>↗</span></a></div></div></article>`).join('')||'<div class="empty">Пока ничего не найдено.<br><br>Измените условия поиска или выберите другой день.</div>';$('#load').hidden=filtered.length<=limit;$('#allNav').classList.toggle('active',currentView==='jobs');$('#workersNav').classList.toggle('active',currentView==='workers')}
+function render(){const specialty=$('#specialty').value,cities=checkedValues('city'),min=Number($('#salary').value),formats=[...document.querySelectorAll('[name=format]:checked')].map(e=>e.value),exp=[...document.querySelectorAll('[name=experience]:checked')].map(e=>e.value),skills=[...document.querySelectorAll('[name=skill]:checked')].map(e=>e.value),requirements=[...document.querySelectorAll('[name=requirement]:checked')].map(e=>e.value);let filtered=currentRecords().filter(j=>(currentView==='jobs'&&publishedOnly?!!j.key:j.publishedAt===dateDaysAgo(dayOffset))&&matchesSpecialty(j,specialty)&&matchesQuery(j)&&(!cities.length||cities.some(city=>(j.cities||[j.city]).includes(city)))&&(currentView==='workers'?(!min||j.salary<=min):j.salary>=min)&&(!formats.length||formats.includes(j.format))&&(!exp.length||exp.includes(experienceFilterValue(j.experience)))&&(!skills.length||skills.some(skill=>(j.skills||[]).includes(skill)))&&(!requirements.length||requirements.some(item=>(j.requirements||[]).includes(item))));if($('#sort').value==='salary')filtered.sort((a,b)=>b.salary-a.salary);else filtered.sort((a,b)=>(b.publishedTimestamp||b.publishedAt).localeCompare(a.publishedTimestamp||a.publishedAt));$('#resultsTitle').textContent=currentView==='jobs'&&publishedOnly?'Опубликованные вакансии работодателей':dayOffset===0?(currentView==='workers'?'Резюме, опубликованные сегодня':'Вакансии, открытые сегодня'):(currentView==='workers'?'Резюме за ':'Вакансии за ')+displayDate(dateDaysAgo(dayOffset));const total=document.createElement('span');total.textContent=filtered.length+' найдено';$('#resultsTitle').append(total);$('#dayNavigation').hidden=currentView==='jobs'&&publishedOnly;$('#catalogScope').hidden=currentView!=='jobs';$('#publishedCatalog').setAttribute('aria-pressed',String(publishedOnly));$('#dailyCatalog').setAttribute('aria-pressed',String(!publishedOnly));$('#catalogNotice').textContent=catalogError?'Не удалось загрузить опубликованные вакансии. Обновите страницу позже.':'';$('#dayLabel').textContent=(dayOffset===0?'Сегодня · ':dayOffset===1?'Вчера · ':'')+displayDate(dateDaysAgo(dayOffset));$('#newerDay').disabled=dayOffset===0;$('#todayDay').disabled=dayOffset===0;updateFilterSummary();renderFilterChips();$('#jobs').innerHTML=filtered.slice(0,limit).map(safeCard).map(j=>`<article class="job"><div class="job-top"><div class="company"><span class="company-logo">${j.logo}</span>${j.company}${currentView==='workers'?'<span title="Демонстрационные данные">·</span>':''}</div><div class="job-meta"><span class="date">${publicationLabel(j)}</span><button class="save ${saved.has(j.id)?'saved':''}" data-save="${j.id}" aria-label="${saved.has(j.id)?'Удалить из избранного':'Добавить в избранное'}" aria-pressed="${saved.has(j.id)}">${bookmark}</button></div></div><h3>${j.title}</h3><div class="pay">${j.range}<small>${currentView==='workers'?'ожидаемый доход':''}</small></div><p class="description">${j.text}</p>${currentView==='jobs'&&j.task?`<p class="job-assessment-hint">Проверочное задание · по желанию · +${j.task.points} баллов</p>`:''}<div class="job-bottom"><div class="tags"><span class="tag">${j.city}</span><span class="tag">${j.format}</span><span class="tag">${j.experience}</span></div><div class="job-actions">${currentView==='jobs'?`<button type="button" class="primary quick-apply" data-apply="${j.id}">Откликнуться</button>`:''}<a class="details" href="${currentView==='workers'?'resume.html':'vacancy.html'}?id=${j.id}">Подробнее <span>↗</span></a></div></div></article>`).join('')||(catalogError&&currentView==='jobs'?'<div class="empty">Список вакансий временно недоступен. Обновите страницу позже.</div>':vacancyCatalog().length===0&&currentView==='jobs'?'<div class="empty">Опубликованных вакансий пока нет.</div>':'<div class="empty">По заданным условиям ничего не найдено.<br><br>Измените фильтры или выберите другой день.</div>');$('#load').hidden=filtered.length<=limit;$('#allNav').classList.toggle('active',currentView==='jobs');$('#workersNav').classList.toggle('active',currentView==='workers')}
 $('#searchForm').addEventListener('submit',e=>{e.preventDefault();limit=3;render();$('#vacancies').scrollIntoView({behavior:'smooth'})});document.querySelectorAll('#sort').forEach(el=>el.addEventListener('change',()=>{limit=3;render()}));$('aside').addEventListener('change',event=>{if(event.target.id==='specialty')buildSkillsFilter();limit=3;render()});$('#specialty').addEventListener('input',()=>{buildSkillsFilter();limit=3;render()});$('#query').addEventListener('input',()=>{buildSkillsFilter();limit=3;render()});$('#reset').onclick=resetFilters;document.querySelectorAll('[data-query]').forEach(b=>b.onclick=()=>{$('#query').value=b.dataset.query;buildSkillsFilter();limit=3;render()});$('#workersNav').onclick=()=>switchView('workers');$('#allNav').onclick=()=>switchView('jobs');$('#load').onclick=()=>{limit+=3;render()};$('#jobs').onclick=event=>{
   const save=event.target.closest('[data-save]'),apply=event.target.closest('[data-apply]');
   if(save){const id=/^\d+$/.test(save.dataset.save)?Number(save.dataset.save):save.dataset.save;saved.has(id)?saved.delete(id):saved.add(id);try{localStorage.setItem('mesto-saved',JSON.stringify([...saved]))}catch{}render()}
-  if(apply&&currentView==='jobs'){const job=vacancyCatalog().find(item=>String(item.id)===apply.dataset.apply);if(job)ApplicationUI.open({key:job.key||'demo:'+job.id,title:job.title,company:job.company,employerEmail:job.employerEmail||'demo',task:job.task||null})}
+  if(apply&&currentView==='jobs')openVacancyChat(apply.dataset.apply,apply);
 };
 const catalogScope=document.createElement('div');catalogScope.id='catalogScope';catalogScope.className='chat-filters catalog-scope';
 [['dailyCatalog','За выбранный день'],['publishedCatalog','Опубликованные работодателями · все даты']].forEach(([id,text])=>{const button=document.createElement('button');button.id=id;button.type='button';button.textContent=text;button.onclick=()=>{publishedOnly=id==='publishedCatalog';limit=3;render()};catalogScope.append(button)});
@@ -292,7 +307,7 @@ if(requestedPublication){
   const record=vacancyCatalog().find(item=>String(item.id)===requestedPublication&&item.key);
   publishedOnly=true;
   if(record){$('#query').value=record.title;limit=vacancyCatalog().length;buildSkillsFilter();render()}
-  else{render();$('#catalogNotice').textContent='Эта публикация не найдена в хранилище этой страницы. Откройте редактор и повторите публикацию в том же браузере.'}
+  else{render();$('#catalogNotice').textContent='Вакансия не найдена среди опубликованных. Возможно, работодатель снял её с публикации.'}
 }
 
 function refreshVacancyCatalog(){
@@ -302,3 +317,21 @@ function refreshVacancyCatalog(){
 }
 window.addEventListener('pageshow',refreshVacancyCatalog);
 window.addEventListener('storage',refreshVacancyCatalog);
+
+let applyingVacancy=false;
+async function openVacancyChat(id,button){
+ if(applyingVacancy)return;
+ if(!document.querySelector('#logoutForm')){location.assign('/?login=1&apply='+encodeURIComponent(id)+'#vacancies');return;}
+ applyingVacancy=true;const label=button?.textContent;if(button){button.disabled=true;button.textContent='Открываем чат…';}
+ let notice=button?.closest('.job')?.querySelector('.apply-status');if(!notice&&button){notice=document.createElement('p');notice.className='apply-status';notice.setAttribute('role','alert');button.closest('.job').append(notice);}const status=notice||document.getElementById('catalogNotice');status.textContent='';
+ try{
+  const response=await fetch('/cabinet/chat-api/apply-chat',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':document.querySelector('meta[name="registration-csrf"]').content},body:JSON.stringify({vacancyId:id}),cache:'no-store'});
+  const result=await response.json();if(response.status===401){location.assign('/?login=1&apply='+encodeURIComponent(id)+'#vacancies');return;}
+  if(!response.ok||!result.success)throw Error(result.error?.message||'Не удалось открыть чат. Повторите попытку.');
+  location.assign(result.data.redirect);
+ }catch(error){status.textContent=error.message;}finally{applyingVacancy=false;if(button){button.disabled=false;button.textContent=label;}}
+}
+const requestedApplication=new URLSearchParams(location.search).get('apply');
+if(requestedApplication&&document.querySelector('#logoutForm')){
+ if(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestedApplication))openVacancyChat(requestedApplication,null);
+}

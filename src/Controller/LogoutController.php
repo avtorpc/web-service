@@ -6,6 +6,8 @@ use Symfony\Component\Routing\Attribute\Route;
 
 final class LogoutController
 {
+    public function __construct(private \App\Session\AuthSession $auth) {}
+
     #[Route('/logout', name: 'logout', methods: ['POST'])]
     public function __invoke(Request $request): Response
     {
@@ -15,7 +17,7 @@ final class LogoutController
             return new Response('Обновите страницу и повторите выход.', 403, ['Cache-Control' => 'no-store']);
         }
         // Destroy the session containing tokens; the browser never receives them.
-        $session->invalidate();
+        $this->auth->logout($session);
         return new RedirectResponse('/', 303, ['Cache-Control' => 'no-store']);
     }
 }

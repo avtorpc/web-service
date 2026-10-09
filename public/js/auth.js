@@ -3,8 +3,6 @@
 if (!document.querySelector('#authModal')) {
   const logoutForm = document.querySelector('#logoutForm');
   if (logoutForm) {
-    const remaining = Number(logoutForm.dataset.sessionExpiresAt) * 1000 - Date.now();
-    setTimeout(() => location.reload(), Math.max(0, Math.min(remaining, 2147483647)));
     const employerLink = document.querySelector('#createVacancy');
     if (employerLink) employerLink.href = 'employer.html';
   }
@@ -96,7 +94,7 @@ $('#changeVerifyEmail').onclick=()=>authAction($('#verifyStatus'),async()=>{
 });
 $('#loginForm').addEventListener('submit',event=>{
  event.preventDefault();if(!event.target.reportValidity())return;
- authAction($('#authStatus'),async()=>{const password=$('#loginPassword').value;$('#loginPassword').value='';const result=await authRequest('login',{email:$('#loginEmail').value.trim(),password});$('#authStatus').textContent=result.message;location.assign(result.redirect || '/cabinet');});
+ authAction($('#authStatus'),async()=>{const password=$('#loginPassword').value;$('#loginPassword').value='';const result=await authRequest('login',{email:$('#loginEmail').value.trim(),password});$('#authStatus').textContent=result.message;const vacancy=new URLSearchParams(location.search).get('apply');location.assign(vacancy&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(vacancy)?'/?apply='+encodeURIComponent(vacancy)+'#vacancies':result.redirect || '/cabinet');});
 });
 $('#authModal').addEventListener('close',()=>{$('#loginPassword').value='';$('#registerPassword').value='';$('#emailCode').value='';$('#openAuth').focus();});
 $('#authModal').addEventListener('click',event=>{if(event.target!==$('#authModal'))return;const r=$('#authModal').getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)$('#authModal').close();});

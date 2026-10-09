@@ -1,0 +1,51 @@
+(() => {
+ const root=document.querySelector('[data-chat-role]');if(!root||!document.querySelector('#chatList'))return;
+ const $=id=>document.getElementById(id),csrf=document.querySelector('meta[name="registration-csrf"]').content,role=root.dataset.chatRole;
+ const labels={all:'Все',rejected:'Отказы',reviewing:'На рассмотрении',submitted:'Без ответа',invited:'Приглашения',favorite:'Избранные',withdrawn:'Отозван'};
+ let apps=[],current=null,conversation=null,userId=null,socket=null,filter=role==='applicant'?'invited':'all',busy=false,switchId=0,refreshing=false;
+ const drafts=new Map(),pending=new Map(),messages=new Map();let cursor='0';
+ const api=async(path,body,query='')=>{const r=await fetch('/cabinet/chat-api/'+path+query,{method:body===undefined?'GET':'POST',headers:body===undefined?{}:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});const data=await r.json();if(r.status===401){location.assign('/?login=1');throw Error('Войдите в аккаунт.');}if(!r.ok||!data.success)throw Error(data.error?.message||'Не удалось выполнить запрос.');return data.data;};
+ const text=(tag,value,cls)=>{const e=document.createElement(tag);e.textContent=value??'';if(cls)e.className=cls;return e;};
+ const status=()=>labels[current?.status]||current?.status||'';
+ function renderList(){
+  const needle=$('chatSearch').value.trim().toLowerCase(),vacancy=$('chatVacancy')?.value||'',base=apps.filter(a=>!vacancy||a.vacancy_id===vacancy);
+  $('chatFilters').replaceChildren();for(const key of role==='applicant'?['all','rejected','reviewing','submitted','invited','favorite']:['all','rejected','reviewing','submitted','invited']){
+   const count=base.filter(a=>key==='all'||(key==='favorite'?a.conversation?.candidate_favorite:a.status===key)).length,b=text('button',labels[key]+' · '+count);b.type='button';b.setAttribute('aria-pressed',String(filter===key));b.onclick=()=>{filter=key;renderList();};$('chatFilters').append(b);
+  }
+  const rows=base.filter(a=>(filter==='all'||(filter==='favorite'?a.conversation?.candidate_favorite:a.status===filter))&&`${a.vacancy_title} ${a.company} ${a.candidate_name}`.toLowerCase().includes(needle));$('chatList').replaceChildren();
+  for(const a of rows){const b=text('button','', 'chat-list-item');b.type='button';b.setAttribute('aria-current',String(current?.id===a.id));b.append(text('strong',a.vacancy_title),text('span',role==='employer'?a.candidate_name:a.company),text('small',`${labels[a.status]||a.status}${a.conversation?.unread?' · Новых: '+a.conversation.unread:''}`),text('small',(a.conversation?.last_message||a.resume_snapshot?.coverLetter||'Новый отклик').slice(0,120)));b.onclick=()=>open(a.id);$('chatList').append(b);}
+  if(!rows.length){$('chatList').append(text('p',!apps.length?'Откликов пока нет.':filter==='invited'&&!base.some(a=>a.status==='invited')?'Приглашений пока нет.':'Нет откликов по выбранным условиям.'));const b=text('button','Показать все отклики');b.type='button';b.onclick=()=>{filter='all';$('chatSearch').value='';renderList();};$('chatList').append(b);if(role==='applicant'){const a=text('a','Найти вакансию');a.href='/#vacancies';$('chatList').append(a);}}
+ }
+ async function loadList(){const data=await api('list');apps=data;const select=$('chatVacancy');if(select){const saved=select.value||new URLSearchParams(location.search).get('vacancy')||'';select.replaceChildren(new Option('Все вакансии',''));const seen=new Set();for(const a of apps)if(!seen.has(a.vacancy_id)){seen.add(a.vacancy_id);select.add(new Option(a.vacancy_title,a.vacancy_id));}if(saved&&!seen.has(saved))select.add(new Option('Вакансия без откликов',saved));select.value=saved;}
+  if(current){const updated=apps.find(a=>a.id===current.id);if(updated){current=updated;if(updated.conversation)conversation=updated.conversation;renderHeader();}}renderList();
+ }
+ function renderHeader(){if(!current)return;$('chatTitle').textContent=(role==='employer'?current.candidate_name:current.company)+' · '+current.vacancy_title;$('chatVacancyLink').href='/vacancy.html?id='+current.vacancy_id;
+  $('chatStatus').textContent=status()+(current.employer_score!==null?' · Оценка работодателя: '+current.employer_score+' из 100':'')+(current.employer_comment?' · '+current.employer_comment:'');
+  const box=$('chatResume'),r=current.resume_snapshot||{};box.replaceChildren(text('h3',r.kind==='profile'?'Профиль соискателя':r.title||'Резюме'),text('p',r.display_name||current.candidate_name),text('p',r.text||(r.kind==='profile'?'Описание профиля пока не заполнено.':''), 'chat-text'),text('h4','Сопроводительное сообщение'),text('p',r.coverLetter||'Не указано','chat-text'));
+  if(current.answer)box.append(text('h4','Ответ на задание'),text('p',JSON.stringify(current.answer,null,2),'chat-text'));
+  if($('chatFavorite'))$('chatFavorite').textContent=conversation?.candidate_favorite?'Убрать из избранного':'В избранное';
+ }
+ async function open(id){
+  if(current)drafts.set(current.id,$('chatBody').value);const nonce=++switchId;current=apps.find(a=>a.id===id);if(!current)return;
+  $('chatError').textContent='';$('chatBody').value=drafts.get(id)||'';$('chatSendStatus').textContent='';messages.clear();cursor='0';$('chatMessages').replaceChildren();$('chatSelected').hidden=false;$('chatEmpty').hidden=true;conversation=null;renderHeader();renderList();
+  if($('chatDecision')){$('chatDecision').value=current.status;$('chatScore').value=current.employer_score??'';$('chatComment').value=current.employer_comment||'';}
+  const btn=$('chatMessageForm').querySelector('button');btn.disabled=true;
+  try{const c=await api('open',{applicationId:id});if(nonce!==switchId)return;conversation=c;current.conversation=c;renderHeader();await sync(nonce);history.replaceState(null,'','/cabinet/chats?application='+id+(role==='employer'?'&vacancy='+current.vacancy_id:''));}
+  catch(e){if(nonce===switchId)$('chatError').textContent=e.message;}finally{if(nonce===switchId)btn.disabled=!conversation;}
+ }
+ function renderMessages(){const box=$('chatMessages');box.replaceChildren();const ordered=[...messages.values()].sort((a,b)=>BigInt(a.seq)<BigInt(b.seq)?-1:1);for(const m of ordered){const mine=m.author_id===userId,e=text('article','', 'chat-message'+(mine?' mine':''));e.append(text('small',(mine?'Вы':role==='applicant'?'Работодатель':'Соискатель')+' · '+new Date(m.created_at).toLocaleString('ru-RU')),text('p',m.body));box.append(e);}box.scrollTop=box.scrollHeight;}
+ async function sync(nonce=switchId){if(!conversation)return;const id=conversation.id;let count;do{const rows=await api('conversations/'+id+'/messages',undefined,'?after='+cursor);if(nonce!==switchId||conversation?.id!==id)return;for(const m of rows){messages.set(m.id,m);if(BigInt(m.seq)>BigInt(cursor))cursor=m.seq;}count=rows.length;}while(count===100);renderMessages();if(cursor!=='0')await api('conversations/'+id+'/read',{seq:cursor});}
+ async function connect(){if(refreshing)return;refreshing=true;try{const credentials=await api('bootstrap');userId=credentials.userId;if(socket){socket.removeAllListeners();socket.disconnect();}if(typeof io!=='function'){ $('chatConnection').textContent='Переписка доступна; обновление выполняется периодически.';return;}
+  socket=io({path:'/chat/socket.io',auth:{token:credentials.token},reconnection:true});socket.on('connect',()=>{$('chatConnection').textContent='Переписка подключена';sync().catch(e=>$('chatError').textContent=e.message);loadList().catch(()=>{});});socket.on('disconnect',()=>{$('chatConnection').textContent='Связь прервана. Сообщения сохранены; восстанавливаем подключение…';});socket.on('auth-expired',()=>{setTimeout(()=>connect().catch(()=>{}),300);});socket.on('message',m=>{if(conversation?.id===m.conversation_id)sync().catch(()=>{});loadList().catch(()=>{});});socket.on('connect_error',()=>{$('chatConnection').textContent='Обновляем переписку через сервер. Восстанавливаем соединение…';});
+ }finally{refreshing=false;}}
+ $('chatMessageForm').onsubmit=async event=>{event.preventDefault();if(busy||!conversation)return;const appId=current.id,c=conversation,body=$('chatBody').value;if(!body.trim()||Array.from(body).length>5000){$('chatSendStatus').textContent='Введите сообщение от 1 до 5000 символов.';return;}const key=appId+'\n'+body;let clientMessageId=pending.get(key);if(!clientMessageId){clientMessageId=crypto.randomUUID();pending.set(key,clientMessageId);}busy=true;const button=event.target.querySelector('button');button.disabled=true;$('chatSendStatus').textContent='Отправляем…';
+  try{const m=await api('conversations/'+c.id+'/messages',{body,clientMessageId});
+   pending.delete(key);if(drafts.get(appId)===body)drafts.set(appId,'');if(current.id===appId){if($('chatBody').value===body)$('chatBody').value='';$('chatSendStatus').textContent='Сообщение сохранено.';await sync();}await loadList();
+  }catch(e){if(current.id===appId)$('chatSendStatus').textContent=e.message;}finally{busy=false;button.disabled=!conversation;}
+ };
+ if($('chatFavorite'))$('chatFavorite').onclick=async()=>{if(!conversation)return;try{await api('conversations/'+conversation.id+'/favorite',{favorite:!conversation.candidate_favorite});await loadList();}catch(e){$('chatError').textContent=e.message;}};
+ if($('chatDecisionForm'))$('chatDecisionForm').onsubmit=async event=>{event.preventDefault();if(!current)return;const button=event.target.querySelector('button'),body={status:$('chatDecision').value,comment:$('chatComment').value};if($('chatScore').value!=='')body.score=Number($('chatScore').value);button.disabled=true;try{await api('application/'+current.id,body);$('chatDecisionStatus').textContent='Решение сохранено.';await loadList();}catch(e){$('chatDecisionStatus').textContent=e.message;}finally{button.disabled=false;}};
+ $('chatSearch').oninput=renderList;if($('chatVacancy'))$('chatVacancy').onchange=renderList;
+ (async()=>{try{await connect();await loadList();const id=new URLSearchParams(location.search).get('application');if(id){filter='all';await open(id);}}catch(e){$('chatError').textContent=e.message;}})();
+ setInterval(()=>{if(document.hidden)return;loadList().then(()=>sync()).catch(e=>$('chatError').textContent=e.message);},10000);
+})();
