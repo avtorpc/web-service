@@ -2,13 +2,13 @@
 <html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="registration-csrf" content="{{ registration_csrf }}"><title>Тестовое задание — место</title><link rel="stylesheet" href="/css/styles.css"><link rel="stylesheet" href="/css/cabinet.css"></head>
 <body><div class="wrap"><header><a class="logo" href="/" aria-label="место — главная"><span class="mark"></span>место</a><nav><a href="/">Главная</a><a href="/cabinet">Личный кабинет</a></nav>{% include 'prototype/auth-navigation.html.twig' %}</header>
 <main class="cabinet-page"><a href="/cabinet#myTasks">← Мои задания</a>
-{% if task_error %}<section class="cabinet-card"><h1>Тестовое задание</h1><p role="alert">{{ task_error }}</p></section>
+{% if task_error %}<section class="cabinet-card" id="taskError" data-task-id="{{ task_id }}"><h1>Тестовое задание</h1><p role="alert">{{ task_error }}</p><button type="button" class="primary" id="retryTaskPage">Повторить генерацию</button><p id="retryTaskMessage" class="cabinet-note" role="status" aria-live="polite">Повторно запросить задание через GigaChat.</p></section>
 {% else %}
 {% set attempt = task.attempt %}{% set attempt_status = attempt.status|default('in_progress') %}
-<section class="cabinet-card" id="taskPage" data-task-id="{{ task.id }}" data-task-status="{{ task.status }}" data-attempt-status="{{ attempt_status }}">
+<section class="cabinet-card" id="taskPage" data-task-id="{{ task.id }}" data-task-status="{{ task.status }}" data-attempt-status="{{ attempt_status }}" data-task-created="{{ task.created_at }}">
 <div class="eyebrow">Задание №{{ task.id }}</div><h1>{{ task.assignment.title|default('Тестовое задание') }}</h1>
 <p>{{ task.selection.specialization_name|default('') }} · {{ task.selection.declared_grade_name|default('') }} · {{ task.created_at|date('d.m.Y H:i') }}</p>
-{% if task.status == 'generating' %}<p id="taskWaiting" role="status">ИИ готовит задание. Можно вернуться в кабинет — оно сохранится в списке.</p>
+{% if task.status == 'generating' %}<div class="task-progress" id="taskProgress" role="status" aria-live="polite"><div class="task-progress-head"><strong>Подготовка задания</strong><strong id="taskProgressValue">10%</strong></div><div class="task-progress-track"><div class="task-progress-bar" id="taskProgressBar" style="width:10%"></div></div><p id="taskProgressMessage">Собираем задание по вашему выбору…</p><small>Процент ориентировочный. Задание появится автоматически, когда проверка GigaChat завершится.</small></div>
 {% elseif task.status == 'generation_failed' %}<p role="alert">{{ task.error }}</p><button type="button" class="primary" id="retryGeneration">Повторить получение задания</button><p>Если сочетание несовместимо, измените выбор в кабинете и получите новое задание.</p>
 {% else %}
 <label class="task-field">Описание задания<textarea rows="14" readonly aria-readonly="true">{{ task.assignment.text }}</textarea></label>
