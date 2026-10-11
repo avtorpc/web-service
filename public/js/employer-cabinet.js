@@ -58,7 +58,7 @@
         message.dataset.error = 'false';
         message.textContent = 'Сохраняем черновик…';
         try {
-            if (!form.dataset.id) form.dataset.id = crypto.randomUUID();
+            if (!form.dataset.id) form.dataset.id = window.MestoUUID();
             const fields = Object.fromEntries(new FormData(form));
             const title = fields.title;
             delete fields.title;

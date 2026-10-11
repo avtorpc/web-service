@@ -46,7 +46,7 @@
  generate.addEventListener('click',async()=>{
   if(generate.disabled||generating)return;generating=true;generationState();submit.disabled=true;status(message,'Создаём задание…');
   try{
-   let requestKey=sessionStorage.getItem('assessmentRequestKey');if(!requestKey){requestKey=crypto.randomUUID();sessionStorage.setItem('assessmentRequestKey',requestKey);}
+   let requestKey=sessionStorage.getItem('assessmentRequestKey');if(!requestKey){requestKey=window.MestoUUID();sessionStorage.setItem('assessmentRequestKey',requestKey);}
    const task=await request('tests',{requestKey});sessionStorage.removeItem('assessmentRequestKey');location.assign(task.redirect);
   }catch(error){status(message,error.message,true);}finally{generating=false;submit.disabled=false;generationState();}
  });
